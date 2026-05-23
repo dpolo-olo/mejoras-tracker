@@ -20,8 +20,10 @@ export default function App() {
       .eq('id', userId)
       .single()
 
+    const avatarUrl = userMeta?.avatar_url ?? userMeta?.picture ?? null
+
     if (data) {
-      setProfile(data as Profile)
+      setProfile({ ...(data as Profile), avatar_url: avatarUrl })
     } else {
       const newProfile: Profile = {
         id: userId,
@@ -31,6 +33,7 @@ export default function App() {
           userMeta?.name ??
           userEmail.split('@')[0],
         api_key: null,
+        avatar_url: avatarUrl,
       }
       await supabase.from('profiles').upsert(newProfile)
       setProfile(newProfile)

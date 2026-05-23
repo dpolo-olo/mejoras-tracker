@@ -54,9 +54,18 @@ export function Header({ profile }: Props) {
               <p className="text-xs font-medium text-navy-900 leading-none">{displayName}</p>
               <p className="text-[10px] text-navy-600 mt-0.5 leading-none">{profile.email}</p>
             </div>
-            <div className="w-7 h-7 rounded-full bg-navy-900 flex items-center justify-center text-cream-50 text-xs font-semibold flex-shrink-0">
-              {initial}
-            </div>
+            {profile.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt={displayName}
+                className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-navy-900 flex items-center justify-center text-cream-50 text-xs font-semibold flex-shrink-0">
+                {initial}
+              </div>
+            )}
             <svg
               className={`w-3.5 h-3.5 text-navy-600 transition-transform ${menuOpen ? 'rotate-180' : ''}`}
               fill="none" stroke="currentColor" viewBox="0 0 24 24"
