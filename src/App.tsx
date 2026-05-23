@@ -81,7 +81,7 @@ export default function App() {
   return (
     <>
       <Header profile={profile} />
-      <TrackerPage apiKey={CLAUDE_API_KEY} userId={user.id} />
+      <TrackerPage apiKey={CLAUDE_API_KEY} profile={profile} />
     </>
   )
 }

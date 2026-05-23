@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { StatusBadge } from './StatusBadge'
 import { ImageModal } from './ImageModal'
 import { DeleteModal } from './DeleteModal'
-import type { Mejora, Estado } from '../../types'
+import type { Mejora, Estado, Profile } from '../../types'
 
 const ESTADOS: Estado[] = ['Pendiente', 'En Progreso', 'Completado', 'Cancelado']
 const ALL_FILTERS = ['Todos', ...ESTADOS] as const
@@ -11,15 +11,16 @@ type Filter = (typeof ALL_FILTERS)[number]
 
 interface EditingCell {
   id: string
-  field: 'usuario' | 'responsable' | 'nota' | 'estado'
+  field: 'responsable' | 'nota' | 'estado'
 }
 
 interface Props {
   mejoras: Mejora[]
   onUpdate: () => void
+  profiles: Profile[]
 }
 
-export function MejorasTable({ mejoras, onUpdate }: Props) {
+export function MejorasTable({ mejoras, onUpdate, profiles }: Props) {
   const [filter, setFilter] = useState<Filter>('Todos')
   const [previewSrc, setPreviewSrc] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Mejora | null>(null)
@@ -34,6 +35,10 @@ export function MejorasTable({ mejoras, onUpdate }: Props) {
     'En Progreso': mejoras.filter(m => m.estado === 'En Progreso').length,
     Completado: mejoras.filter(m => m.estado === 'Completado').length,
     Cancelado: mejoras.filter(m => m.estado === 'Cancelado').length,
+  }
+
+  function resolveProfile(email: string) {
+    return profiles.find(p => p.email.toLowerCase() === email?.trim().toLowerCase()) ?? null
   }
 
   function startEdit(id: string, field: EditingCell['field'], value: string) {
@@ -131,7 +136,7 @@ export function MejorasTable({ mejoras, onUpdate }: Props) {
           <table className="min-w-full divide-y divide-cream-300">
             <thead>
               <tr className="bg-cream-100">
-                {['Imagen', 'Error detectado', 'Usuario', 'Fecha', 'Estado', 'Responsable', 'Nota', ''].map(h => (
+                {['Imagen', 'Error detectado', 'Registrado por', 'Fecha', 'Estado', 'Responsable', 'Nota', ''].map(h => (
                   <th
                     key={h}
                     className="px-4 py-3 text-left text-[10px] font-semibold text-navy-500 uppercase tracking-wider whitespace-nowrap"
@@ -142,119 +147,146 @@ export function MejorasTable({ mejoras, onUpdate }: Props) {
               </tr>
             </thead>
             <tbody className="bg-cream-50 divide-y divide-cream-200">
-              {filtered.map(m => (
-                <tr key={m.id} className="hover:bg-cream-100 transition-colors">
+              {filtered.map(m => {
+                const responsableProfile = resolveProfile(m.responsable)
+                return (
+                  <tr key={m.id} className="hover:bg-cream-100 transition-colors">
 
-                  <td className="px-4 py-3">
-                    {m.imagen_url ? (
-                      <button
-                        onClick={() => setPreviewSrc(m.imagen_url)}
-                        className="w-10 h-10 rounded-lg overflow-hidden border border-cream-300 hover:border-navy-900 transition-colors block"
-                      >
-                        <img src={m.imagen_url} alt="" className="w-full h-full object-cover" />
-                      </button>
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg bg-cream-200 border border-cream-300" />
-                    )}
-                  </td>
+                    <td className="px-4 py-3">
+                      {m.imagen_url ? (
+                        <button
+                          onClick={() => setPreviewSrc(m.imagen_url)}
+                          className="w-10 h-10 rounded-lg overflow-hidden border border-cream-300 hover:border-navy-900 transition-colors block"
+                        >
+                          <img src={m.imagen_url} alt="" className="w-full h-full object-cover" />
+                        </button>
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-cream-200 border border-cream-300" />
+                      )}
+                    </td>
 
-                  <td className="px-4 py-3 max-w-xs">
-                    <p className="text-xs text-navy-900 leading-snug line-clamp-2">{m.titulo}</p>
-                  </td>
+                    <td className="px-4 py-3 max-w-xs">
+                      <p className="text-xs text-navy-900 leading-snug line-clamp-2">{m.titulo}</p>
+                    </td>
 
-                  <td
-                    className="px-4 py-3 cursor-pointer"
-                    onClick={() => !editing && startEdit(m.id, 'usuario', m.usuario)}
-                  >
-                    {editing?.id === m.id && editing.field === 'usuario' ? (
-                      <input
-                        autoFocus
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        onBlur={commitEdit}
-                        onKeyDown={onKeyDown}
-                        className="w-full min-w-[100px] px-2 py-1 text-xs border border-navy-900 rounded focus:outline-none"
-                      />
-                    ) : (
-                      <span className="text-xs text-navy-700 block min-w-[80px] min-h-[18px] group-hover:text-navy-900">
-                        {m.usuario || <span className="text-cream-400">—</span>}
-                      </span>
-                    )}
-                  </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const authorProfile = profiles.find(pr => pr.id === m.user_id)
+                          return authorProfile ? (
+                            <>
+                              {authorProfile.avatar_url ? (
+                                <img
+                                  src={authorProfile.avatar_url}
+                                  alt={authorProfile.full_name ?? ''}
+                                  className="w-5 h-5 rounded-full object-cover flex-shrink-0"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-navy-900 flex items-center justify-center text-cream-50 text-[9px] font-semibold flex-shrink-0">
+                                  {(authorProfile.full_name || authorProfile.email).charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <span className="text-xs text-navy-700 whitespace-nowrap">
+                                {authorProfile.full_name?.split(' ')[0] || authorProfile.email.split('@')[0]}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-xs text-navy-700">{m.usuario || <span className="text-cream-400">—</span>}</span>
+                          )
+                        })()}
+                      </div>
+                    </td>
 
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-xs text-navy-600">{formatDate(m.fecha)}</span>
-                  </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="text-xs text-navy-600">{formatDate(m.fecha)}</span>
+                    </td>
 
-                  <td
-                    className="px-4 py-3 cursor-pointer"
-                    onClick={() => !editing && startEdit(m.id, 'estado', m.estado)}
-                  >
-                    {editing?.id === m.id && editing.field === 'estado' ? (
-                      <select
-                        autoFocus
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        onBlur={commitEdit}
-                        className="text-xs border border-navy-900 rounded px-2 py-1 focus:outline-none bg-white"
-                      >
-                        {ESTADOS.map(e => <option key={e} value={e}>{e}</option>)}
-                      </select>
-                    ) : (
-                      <StatusBadge estado={m.estado as Estado} />
-                    )}
-                  </td>
-
-                  <td
-                    className="px-4 py-3 cursor-pointer"
-                    onClick={() => !editing && startEdit(m.id, 'responsable', m.responsable)}
-                  >
-                    {editing?.id === m.id && editing.field === 'responsable' ? (
-                      <input
-                        autoFocus
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        onBlur={commitEdit}
-                        onKeyDown={onKeyDown}
-                        className="w-full min-w-[100px] px-2 py-1 text-xs border border-navy-900 rounded focus:outline-none"
-                      />
-                    ) : (
-                      <span className="text-xs text-navy-700 block min-w-[80px] min-h-[18px]">
-                        {m.responsable || <span className="text-cream-400">—</span>}
-                      </span>
-                    )}
-                  </td>
-
-                  <td
-                    className="px-4 py-3 max-w-[180px] cursor-pointer"
-                    onClick={() => !editing && startEdit(m.id, 'nota', m.nota)}
-                  >
-                    {editing?.id === m.id && editing.field === 'nota' ? (
-                      <input
-                        autoFocus
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        onBlur={commitEdit}
-                        onKeyDown={onKeyDown}
-                        className="w-full min-w-[120px] px-2 py-1 text-xs border border-navy-900 rounded focus:outline-none"
-                      />
-                    ) : (
-                      <span className="text-xs text-navy-600 block min-h-[18px] line-clamp-1">
-                        {m.nota || <span className="text-cream-400">—</span>}
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => setDeleteTarget(m)}
-                      className="text-[11px] text-cream-500 hover:text-red-600 transition-colors"
+                    <td
+                      className="px-4 py-3 cursor-pointer"
+                      onClick={() => !editing && startEdit(m.id, 'estado', m.estado)}
                     >
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                      {editing?.id === m.id && editing.field === 'estado' ? (
+                        <select
+                          autoFocus
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value)}
+                          onBlur={commitEdit}
+                          className="text-xs border border-navy-900 rounded px-2 py-1 focus:outline-none bg-white"
+                        >
+                          {ESTADOS.map(e => <option key={e} value={e}>{e}</option>)}
+                        </select>
+                      ) : (
+                        <StatusBadge estado={m.estado as Estado} />
+                      )}
+                    </td>
+
+                    <td
+                      className="px-4 py-3 cursor-pointer"
+                      onClick={() => !editing && startEdit(m.id, 'responsable', m.responsable)}
+                    >
+                      {editing?.id === m.id && editing.field === 'responsable' ? (
+                        <input
+                          type="email"
+                          autoFocus
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value)}
+                          onBlur={commitEdit}
+                          onKeyDown={onKeyDown}
+                          className="w-full min-w-[140px] px-2 py-1 text-xs border border-navy-900 rounded focus:outline-none"
+                          placeholder="correo@empresa.com"
+                        />
+                      ) : (
+                        <div className="min-w-[100px]">
+                          {responsableProfile ? (
+                            <>
+                              <span className="text-xs text-navy-700 block">
+                                {responsableProfile.full_name || responsableProfile.email}
+                              </span>
+                              <span className="text-[10px] text-navy-500 block">
+                                {responsableProfile.email}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-xs text-navy-700">
+                              {m.responsable || <span className="text-cream-400">—</span>}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    <td
+                      className="px-4 py-3 max-w-[180px] cursor-pointer"
+                      onClick={() => !editing && startEdit(m.id, 'nota', m.nota)}
+                    >
+                      {editing?.id === m.id && editing.field === 'nota' ? (
+                        <input
+                          autoFocus
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value)}
+                          onBlur={commitEdit}
+                          onKeyDown={onKeyDown}
+                          className="w-full min-w-[120px] px-2 py-1 text-xs border border-navy-900 rounded focus:outline-none"
+                        />
+                      ) : (
+                        <span className="text-xs text-navy-600 block min-h-[18px] line-clamp-1">
+                          {m.nota || <span className="text-cream-400">—</span>}
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => setDeleteTarget(m)}
+                        className="text-[11px] text-cream-500 hover:text-red-600 transition-colors"
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import type { Estado } from '../../types'
+import type { Estado, Profile } from '../../types'
 
 const ESTADOS: Estado[] = ['Pendiente', 'En Progreso', 'Completado', 'Cancelado']
 
 interface FormData {
   estado: Estado
-  usuario: string
   responsable: string
   nota: string
 }
@@ -18,6 +17,7 @@ interface Props {
   onCancel: () => void
   saving?: boolean
   editMode?: boolean
+  profiles: Profile[]
 }
 
 export function MejoraForm({
@@ -28,15 +28,19 @@ export function MejoraForm({
   onCancel,
   saving,
   editMode,
+  profiles,
 }: Props) {
   const [estado, setEstado] = useState<Estado>(initialData?.estado ?? 'Pendiente')
-  const [usuario, setUsuario] = useState(initialData?.usuario ?? '')
   const [responsable, setResponsable] = useState(initialData?.responsable ?? '')
   const [nota, setNota] = useState(initialData?.nota ?? '')
 
+  const matchedProfile = profiles.find(
+    p => p.email.toLowerCase() === responsable.trim().toLowerCase()
+  )
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    onSave({ estado, usuario, responsable, nota })
+    onSave({ estado, responsable, nota })
   }
 
   return (
@@ -72,28 +76,25 @@ export function MejoraForm({
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-navy-700 mb-1.5">Usuario</label>
-          <input
-            type="text"
-            value={usuario}
-            onChange={e => setUsuario(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-white border border-cream-300 rounded-lg text-navy-900 placeholder:text-cream-500 focus:outline-none focus:ring-2 focus:ring-navy-900 focus:border-transparent"
-            placeholder="Asignar usuario"
-          />
-        </div>
-
-        <div>
           <label className="block text-xs font-medium text-navy-700 mb-1.5">Responsable</label>
           <input
-            type="text"
+            type="email"
             value={responsable}
             onChange={e => setResponsable(e.target.value)}
             className="w-full px-3 py-2 text-sm bg-white border border-cream-300 rounded-lg text-navy-900 placeholder:text-cream-500 focus:outline-none focus:ring-2 focus:ring-navy-900 focus:border-transparent"
-            placeholder="Asignar responsable"
+            placeholder="correo@empresa.com"
           />
+          {matchedProfile && (
+            <p className="text-[11px] text-navy-600 mt-1 pl-0.5">
+              {matchedProfile.full_name || matchedProfile.email}
+            </p>
+          )}
+          {responsable.includes('@') && !matchedProfile && (
+            <p className="text-[11px] text-cream-500 mt-1 pl-0.5">Usuario no encontrado</p>
+          )}
         </div>
 
-        <div>
+        <div className="sm:col-span-2">
           <label className="block text-xs font-medium text-navy-700 mb-1.5">Nota</label>
           <input
             type="text"

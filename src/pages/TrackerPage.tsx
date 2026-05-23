@@ -4,20 +4,19 @@ import { analyzeImage } from '../lib/claude'
 import { UploadZone } from '../components/tracker/UploadZone'
 import { MejoraForm } from '../components/tracker/MejoraForm'
 import { MejorasTable } from '../components/tracker/MejorasTable'
-import type { Mejora, Estado } from '../types'
+import type { Mejora, Estado, Profile } from '../types'
 
 type Step = 'idle' | 'analyzing' | 'form' | 'saving'
 
 interface FormData {
   estado: Estado
-  usuario: string
   responsable: string
   nota: string
 }
 
 interface Props {
   apiKey: string
-  userId: string
+  profile: Profile
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -41,9 +40,10 @@ function fileToPreview(file: File): Promise<string> {
   })
 }
 
-export function TrackerPage({ apiKey, userId }: Props) {
+export function TrackerPage({ apiKey, profile }: Props) {
   const [step, setStep] = useState<Step>('idle')
   const [mejoras, setMejoras] = useState<Mejora[]>([])
+  const [profiles, setProfiles] = useState<Profile[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState('')
@@ -54,14 +54,17 @@ export function TrackerPage({ apiKey, userId }: Props) {
     const { data } = await supabase
       .from('mejoras')
       .select('*')
-      .eq('user_id', userId)
       .order('created_at', { ascending: false })
     setMejoras(data ?? [])
     setLoadingData(false)
-  }, [userId])
+  }, [])
 
   useEffect(() => {
     loadMejoras()
+    supabase
+      .from('profiles')
+      .select('id, email, full_name, avatar_url, api_key')
+      .then(({ data }) => setProfiles(data ?? []))
   }, [loadMejoras])
 
   async function handleImageSelected(file: File) {
@@ -89,7 +92,7 @@ export function TrackerPage({ apiKey, userId }: Props) {
 
     try {
       const ext = selectedFile.name.split('.').pop() ?? 'jpg'
-      const path = `${userId}/${Date.now()}.${ext}`
+      const path = `${profile.id}/${Date.now()}.${ext}`
 
       const { error: uploadErr } = await supabase.storage
         .from('mejoras-images')
@@ -102,9 +105,9 @@ export function TrackerPage({ apiKey, userId }: Props) {
         .getPublicUrl(path)
 
       const { error: dbErr } = await supabase.from('mejoras').insert({
-        user_id: userId,
+        user_id: profile.id,
         titulo,
-        usuario: data.usuario,
+        usuario: profile.full_name?.trim() || profile.email.split('@')[0],
         responsable: data.responsable,
         estado: data.estado,
         nota: data.nota,
@@ -174,6 +177,7 @@ export function TrackerPage({ apiKey, userId }: Props) {
             onSave={handleSave}
             onCancel={reset}
             saving={step === 'saving'}
+            profiles={profiles}
           />
         )}
       </div>
@@ -193,7 +197,7 @@ export function TrackerPage({ apiKey, userId }: Props) {
             <div className="w-6 h-6 border-2 border-cream-400 border-t-navy-900 rounded-full animate-spin" />
           </div>
         ) : (
-          <MejorasTable mejoras={mejoras} onUpdate={loadMejoras} />
+          <MejorasTable mejoras={mejoras} onUpdate={loadMejoras} profiles={profiles} />
         )}
       </div>
     </main>
