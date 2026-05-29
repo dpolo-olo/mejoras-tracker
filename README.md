@@ -331,6 +331,167 @@ El prompt instruye a Claude a detectar **unicamente errores estructurales o de i
 
 ---
 
+## Gestion del proyecto de Supabase
+
+### El proyecto se pauso (error "Failed to fetch")
+
+El plan gratuito de Supabase pausa automaticamente los proyectos despues de **7 dias sin actividad**. Cuando esto pasa, todas las peticiones fallan con "Failed to fetch" o "Connection refused".
+
+**Como reactivarlo:**
+1. Entra a [supabase.com](https://supabase.com) con la cuenta del proyecto
+2. Abre el proyecto → aparece un banner **"Your project is paused"**
+3. Haz clic en **"Restore project"**
+4. Espera 1-2 minutos → la app vuelve a funcionar sola
+
+> No hay que cambiar nada en el codigo ni en Netlify. Solo restaurar.
+
+**Para evitar que se pause:**
+- Usandolo al menos una vez por semana no se pausa
+- O actualiza al plan **Pro ($25/mes)** en Supabase → Settings → Billing → no tiene pausa automatica
+
+---
+
+### Crear un proyecto de Supabase desde cero
+
+Si el proyecto actual se perdio, vencio, o necesitas crear uno nuevo para otro entorno (staging, otro equipo, etc.), sigue estos pasos completos:
+
+**1. Crear el proyecto**
+1. Entra a [supabase.com](https://supabase.com) → New project
+2. Elige nombre, contrasena de base de datos y region (us-east-1 o sa-east-1 para latencia minima desde Colombia)
+3. Espera ~2 minutos mientras aprovisiona
+
+**2. Crear las tablas**
+
+Ve a **SQL Editor** y ejecuta este bloque completo:
+
+```sql
+-- Tabla de perfiles de usuario
+create table public.profiles (
+  id          uuid primary key references auth.users(id) on delete cascade,
+  email       text not null,
+  full_name   text,
+  api_key     text,
+  avatar_url  text
+);
+
+-- Tabla de mejoras
+create table public.mejoras (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid references auth.users(id) on delete cascade,
+  titulo      text not null,
+  usuario     text not null default '',
+  responsable text not null default '',
+  estado      text not null default 'Pendiente',
+  nota        text not null default '',
+  imagen_url  text,
+  fecha       timestamptz not null default now(),
+  created_at  timestamptz not null default now()
+);
+
+-- Activar RLS
+alter table public.profiles enable row level security;
+alter table public.mejoras enable row level security;
+
+-- Politicas de profiles
+create policy "Read all profiles"
+  on public.profiles for select
+  to authenticated
+  using (auth.uid() is not null);
+
+create policy "Insert own profile"
+  on public.profiles for insert
+  to authenticated
+  with check (auth.uid() = id);
+
+create policy "Update own profile"
+  on public.profiles for update
+  to authenticated
+  using (auth.uid() = id);
+
+-- Politica de mejoras (todos ven y editan todo)
+create policy "Full access for authenticated"
+  on public.mejoras for all
+  to authenticated
+  using (auth.uid() is not null)
+  with check (auth.uid() is not null);
+```
+
+**3. Crear el bucket de storage**
+1. Ve a **Storage → New bucket**
+2. Nombre: `mejoras-images`
+3. Marca **Public bucket** → Create
+4. Luego en **Storage → Policies** agrega estas tres politicas para el bucket `mejoras-images`:
+
+```sql
+-- Subir imagenes
+create policy "Upload mejoras-images"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'mejoras-images');
+
+-- Leer imagenes (publico)
+create policy "Read mejoras-images"
+  on storage.objects for select
+  to public
+  using (bucket_id = 'mejoras-images');
+
+-- Eliminar imagenes
+create policy "Delete mejoras-images"
+  on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'mejoras-images');
+```
+
+**4. Configurar Google OAuth**
+
+Ve a **Authentication → Providers → Google** y activa el provider con el Client ID y Client Secret de Google Cloud Console. La redirect URI que debes poner en Google es:
+```
+https://<nuevo-proyecto>.supabase.co/auth/v1/callback
+```
+
+Ve a **Authentication → URL Configuration** y pon:
+- Site URL: `https://tu-sitio.netlify.app`
+- Redirect URLs: `http://localhost:5173` (para desarrollo)
+
+**5. Actualizar las variables de entorno**
+
+Con el nuevo proyecto, cambia estas variables en dos lugares:
+
+En `.env` local:
+```env
+VITE_SUPABASE_URL=https://<nuevo-proyecto>.supabase.co
+VITE_SUPABASE_ANON_KEY=<nueva-anon-key>
+```
+
+En Netlify → **Site settings → Environment variables**: actualiza los mismos dos valores y haz **"Clear cache and deploy site"**.
+
+> La `VITE_CLAUDE_API_KEY` no cambia, esa es independiente de Supabase.
+
+---
+
+### Migrar datos del proyecto anterior al nuevo
+
+Si el proyecto anterior todavia esta activo y quieres mover los datos existentes:
+
+**Exportar desde el proyecto viejo:**
+1. Ve a **SQL Editor** en el proyecto viejo
+2. Ejecuta y descarga el resultado de cada consulta:
+
+```sql
+-- Exportar mejoras
+select * from public.mejoras order by created_at;
+```
+
+3. En la esquina superior derecha del resultado hay un boton **Download CSV**
+
+**Importar al proyecto nuevo:**
+1. Ve a **Table Editor → mejoras** en el proyecto nuevo
+2. Boton **Import data** → sube el CSV descargado
+
+> Las imagenes estan en Supabase Storage del proyecto viejo. Si las necesitas migrar, descargalas desde **Storage → mejoras-images** y vuelve a subirlas, o simplemente los registros nuevos apuntaran a URLs del proyecto viejo que eventualmente dejan de funcionar. Lo mas limpio es empezar con registros nuevos en el proyecto nuevo.
+
+---
+
 ## Licencia
 
 Uso interno — O Logistics.
